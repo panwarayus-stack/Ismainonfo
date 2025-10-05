@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ISMAIL OSINT WEB — LOGIN + DASHBOARD</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html,body { height: 100%; font-family: "Lucida Console", monospace; overflow: hidden; background: #000; }
+
+    /* Canvas + background */
+    #codeCanvas { position: fixed; inset: 0; z-index: 1; background: radial-gradient(ellipse at center, rgba(10,10,20,0.9) 0%, rgba(4,6,10,1) 60%); }
+    .bg-blur { position: fixed; inset: 0; z-index: 2; pointer-events: none; backdrop-filter: blur(0.8px) contrast(1.05); mix-blend-mode: overlay; opacity: 0.6; }
+
+    .floatingText {
+      position: absolute; font-weight: 700; font-size: 36px;
+      color: rgba(0,255,200,0.07); letter-spacing: 2px;
+      transform: translateZ(0); text-shadow: 0 0 6px rgba(0,255,200,0.06);
+      white-space: nowrap; z-index: 3; will-change: transform, opacity;
+      animation: floatSlow 10s ease-in-out infinite;
+    }
+    @keyframes floatSlow {
+      0%{transform:translateY(0)translateX(0)rotate(-2deg);opacity:.08}
+      50%{transform:translateY(-30px)translateX(20px)rotate(1deg);opacity:.14}
+      100%{transform:translateY(0)translateX(0)rotate(-2deg);opacity:.08}
+    }
+
+    /* LOGIN */
+    .center-wrap { position: relative; z-index: 10; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 30px; }
+    .login-container {
+      width: 360px; max-width: calc(100% - 40px); padding: 32px; border-radius: 12px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.75), rgba(6,8,12,0.85));
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 40px rgba(0,255,200,0.05) inset;
+      color: #e6fff9; backdrop-filter: blur(4px);
+      border: 1px solid rgba(0,255,200,0.06); text-align: center;
+    }
+    .title { font-size: 22px; color: #80ffe0; margin-bottom: 12px; letter-spacing: 2px; }
+    .subtitle { font-size: 12px; color: rgba(180,255,235,0.5); margin-bottom: 14px; }
+
+    .field { width:100%; padding:12px 14px; margin:9px 0; border-radius:8px;
+      border:1px solid rgba(255,255,255,0.06); background:rgba(0,0,0,0.35);
+      color:#cfeee8; font-size:14px; outline:none;
+    }
+    .btn {
+      margin-top:14px; width:100%; padding:12px 14px; border-radius:8px;
+      border:none; font-weight:700; cursor:pointer; font-size:15px;
+      background:linear-gradient(90deg,#00ffd0,#00a3ff); color:#021214;
+      box-shadow:0 6px 18px rgba(0,160,255,0.12); transition:transform .18s ease,box-shadow .18s ease;
+    }
+    .btn:hover { box-shadow: 0 10px 26px rgba(0,160,255,0.2); }
+    .error { color:#ff8080; margin-top:8px; font-size:13px; min-height:18px; }
+    .hint { margin-top:10px; color:rgba(180,255,235,0.35); font-size:12px; letter-spacing:0.6px; }
+
+    /* DASHBOARD (hidden until login) */
+    #mainContent { display:none; flex-direction:column; align-items:center; justify-content:flex-start; min-height:100vh; color:#00eaff; z-index:10; position:relative; padding-top:48px; }
+    /* ensure title stays in one line */
+    h1 { font-size: clamp(18px, 2.6vw, 28px); margin: 0 0 18px 0; text-shadow:0 0 15px #00eaff; white-space: nowrap; display:inline-block; }
+    .box { background:#111; padding:20px; border-radius:12px; box-shadow:0 0 15px #00eaff; width:90%; max-width:600px; text-align:center; animation:fadeIn 1s ease-in-out; }
+    input#number { width:70%; padding:10px; border:none; border-radius:6px; font-size:16px; text-align:center; outline:none; }
+    button.lookup { padding:10px 20px; margin-top:15px; border:none; border-radius:6px; font-size:16px; font-weight:bold; background:#00eaff; color:#000; cursor:pointer; transition:0.3s; }
+    button.lookup:hover { background:#00bcd4; }
+    pre { text-align:left; background:#000; padding:15px; border-radius:8px; overflow-x:auto; max-height:300px; margin-top:20px; font-size:14px; box-shadow:inset 0 0 10px #00eaff; color:#bfffe6; }
+    .loading { animation: blink 1s infinite alternate; }
+    @keyframes blink { from{opacity:0.3} to{opacity:1} }
+    @keyframes fadeIn { from{opacity:0; transform:translateY(-20px)} to{opacity:1; transform:translateY(0)} }
+
+    /* small responsiveness */
+    @media (max-width:420px){
+      .login-container{ width: 92%; padding: 20px; }
+      input#number{ width: 100%; }
+      .box{ padding:14px; }
+      h1{ font-size:18px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="codeCanvas"></canvas>
+  <div class="bg-blur"></div>
+
+  <!-- floating text -->
+  <div class="floatingText" style="top:10%; left:5%;">MADE BY ISMAIL</div>
+  <div class="floatingText" style="top:35%; left:60%; animation-duration:11s;">MADE BY ISMAIL</div>
+  <div class="floatingText" style="top:70%; left:25%; animation-duration:10s;">MADE BY ISMAIL</div>
+  <div class="floatingText" style="top:50%; left:80%; animation-duration:12s;">MADE BY ISMAIL</div>
+
+  <!-- LOGIN SCREEN (access-key only) -->
+  <div id="loginScreen" class="center-wrap">
+    <div class="login-container" aria-labelledby="loginTitle">
+      <div id="loginTitle" class="title">LOGIN TO GET ACCESS</div>
+      <div class="subtitle">Enter Access Key (access-key only mode — 10 keys supported)</div>
+
+      <form id="loginForm" autocomplete="off">
+        <!-- username removed — access key only -->
+        <input id="accessKey" class="field" placeholder="Access Key" type="password" required>
+        <button type="submit" class="btn">ENTER</button>
+        <div id="errorMsg" class="error" aria-live="polite"></div>
+        <div class="hint">Use Access Key Given By <strong>ISMAIL</strong></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN OSINT SECTION (shown after successful login) -->
+  <div id="mainContent" role="main">
+    <h1>📱 ISMAIL OSINT WEB</h1>
+    <div class="box" role="region" aria-label="Lookup box">
+      <input type="text" id="number" placeholder="Enter number e.g. 9193558616" />
+      <br>
+      <button class="lookup" onclick="lookup()">🔍 Lookup</button>
+      <pre id="result">...Result will appear here...</pre>
+    </div>
+  </div>
+
+  <script>
+    /* ====== CONFIG: set your 10 access keys here (client-side) ======
+       Replace these with your real keys. Keep in mind this is client-side JS
+       so anyone can view them in browser devtools. For secure server-side
+       validation, move this check to your API.
+    */
+    const ACCESS_KEYS = [
+      "ISMAIL-KEY-001",
+      "ISMAIL-KEY-002",
+      "ISMAIL-KEY-003",
+      "ISMAIL-KEY-004",
+      "ISMAIL-KEY-005",
+      "ISMAIL-KEY-006",
+      "ISMAIL-KEY-007",
+      "ISMAIL-KEY-008",
+      "ISMAIL-KEY-009",
+      "ISMAIL-KEY-010"
+    ];
+    // optional: enable localStorage remember (true/false)
+    const REMEMBER = true;
+
+    /* ====== Matrix background (same as before) ====== */
+    const canvas = document.getElementById('codeCanvas');
+    const ctx = canvas.getContext('2d');
+    let w = canvas.width = innerWidth, h = canvas.height = innerHeight;
+    const codeChars = ("01{}[]()<>-=+*/\\|;:,._~!@#$%^&*()ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789").split('');
+    const madePhrase = "MADE BY ISMAIL";
+    let cols = Math.floor(w/14);
+    let drops = Array.from({length:cols}).map(()=>Math.floor(Math.random()*h));
+    addEventListener('resize', ()=>{ w = canvas.width = innerWidth; h = canvas.height = innerHeight; cols = Math.floor(w/14); drops = Array.from({length:cols}).map(()=>Math.floor(Math.random()*h)); });
+
+    let lastPhraseTime = 0;
+    function maybeInjectPhrase(time){
+      if(time - lastPhraseTime > 2200 + Math.random()*5000){
+        lastPhraseTime = time;
+        drawPhraseStreak(Math.floor(Math.random()*drops.length));
+      }
+    }
+    function drawPhraseStreak(colIndex){
+      const x = colIndex * 14 + 10;
+      const yStart = Math.floor(Math.random() * (h - 200)) + 60;
+      const duration = 900 + Math.floor(Math.random() * 900);
+      const start = performance.now();
+      function animateStamp(now){
+        const t = (now - start) / duration;
+        if (t > 1) return;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.font = '20px monospace';
+        ctx.fillStyle = `rgba(0,255,200,${0.06 + 0.7*(1 - Math.abs(0.5 - t)*2)})`;
+        for (let i=-2;i<=2;i++) ctx.fillText(madePhrase, x + i*1.6, yStart + Math.sin(t*Math.PI*2 + i)*6);
+        ctx.restore();
+        requestAnimationFrame(animateStamp);
+      }
+      requestAnimationFrame(animateStamp);
+    }
+
+    function draw(time){
+      ctx.fillStyle = 'rgba(2,4,6,0.12)';
+      ctx.fillRect(0,0,w,h);
+      ctx.font = '14px monospace';
+      for (let i = 0; i < drops.length; i++){
+        const text = Math.random() > 0.995 ? madePhrase[Math.floor(Math.random()*madePhrase.length)] : codeChars[Math.floor(Math.random()*codeChars.length)];
+        const x = i * 14 + 10;
+        const y = drops[i] * 14;
+        ctx.fillStyle = 'rgba(160,255,230,0.95)';
+        ctx.fillText(text, x, y);
+        ctx.fillStyle = 'rgba(0,255,200,0.18)';
+        ctx.fillText(codeChars[Math.floor(Math.random()*codeChars.length)], x, y - 18);
+        ctx.fillStyle = 'rgba(0,255,200,0.08)';
+        ctx.fillText(codeChars[Math.floor(Math.random()*codeChars.length)], x, y - 34);
+        drops[i] = (drops[i]*14 > h && Math.random() > 0.975) ? 0 : drops[i] + 1;
+      }
+      maybeInjectPhrase(time);
+      requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+
+    /* ====== Login (access-key only) ====== */
+    const loginForm = document.getElementById('loginForm');
+    const errorMsg = document.getElementById('errorMsg');
+
+    // if REMEMBER enabled and key in localStorage, auto-login
+    if (REMEMBER && localStorage.getItem('ismailloginkey')) {
+      const saved = localStorage.getItem('ismailloginkey');
+      if (ACCESS_KEYS.includes(saved)) {
+        showMain();
+      } else {
+        localStorage.removeItem('ismailloginkey');
+      }
+    }
+
+    loginForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      const accessKey = document.getElementById('accessKey').value.trim();
+      if (!accessKey) { errorMsg.textContent = 'Enter access key'; return; }
+      if (ACCESS_KEYS.includes(accessKey)) {
+        // store if remember enabled
+        if (REMEMBER) localStorage.setItem('ismailloginkey', accessKey);
+        flashSuccessThen(showMain);
+      } else {
+        errorMsg.textContent = 'Invalid Access Key!';
+        // shake
+        const box = document.querySelector('.login-container');
+        box.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'translateX(0)' }], { duration: 320, easing: 'ease-in-out' });
+      }
+    });
+
+    function showMain() {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'flex';
+    }
+
+    function flashSuccessThen(cb) {
+      const box = document.querySelector('.login-container');
+      box.animate(
+        [{ boxShadow: '0 0 10px rgba(0,255,180,0.08)' }, { boxShadow: '0 0 120px rgba(0,255,180,0.6)' }, { boxShadow: '0 0 6px rgba(0,255,180,0.08)' }],
+        { duration: 600, easing: 'cubic-bezier(.2,.9,.3,1)' }
+      );
+      setTimeout(cb, 650);
+    }
+
+    // clear error on input
+    document.getElementById('accessKey').addEventListener('input', ()=> errorMsg.textContent = '');
+
+    /* ====== Lookup (same as before) ====== */
+    async function lookup(){
+      const number = document.getElementById('number').value.trim();
+      const resBox = document.getElementById('result');
+      if (!number) { alert("⚠️ Please enter a number"); return; }
+      resBox.textContent = "⏳ Fetching data..."; resBox.classList.add("loading");
+      try {
+        const res = await fetch(`/api/fetchData?number=${encodeURIComponent(number)}`);
+        if (!res.ok) throw new Error('Server error ' + res.status);
+        const data = await res.json();
+        resBox.classList.remove("loading");
+        resBox.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resBox.classList.remove("loading");
+        resBox.textContent = "❌ Error: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
